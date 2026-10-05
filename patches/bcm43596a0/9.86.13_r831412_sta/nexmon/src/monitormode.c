@@ -178,7 +178,16 @@ __attribute__((at(0x1f0a6, "flashpatch", CHIP_VER_BCM4358, FW_VER_ALL)))
 __attribute__((at(0x19CE86, "", CHIP_VER_BCM4356, FW_VER_ALL)))
 BLPatch(wl_monitor_hook, wl_monitor_hook);
 
-__attribute__((at(0xa67b0, "flashpatch", CHIP_VER_BCM43596a0, FW_VER_ALL)))
+// BISECT (temporary, 9.86.13_r831412_sta crash investigation): the "at()" flashpatch
+// attribute below is commented out so this hook is NOT injected into ROM at all for
+// this build. wl_monitor_hook never fired once (zero MONHOOK log lines) across a full
+// boot-to-crash capture, and the trap's pc/lr (0x5669a/0x69683) are nowhere near this
+// flashpatch address (0xa67b0) or in the "patch" RAM region where our C code lives --
+// both point away from the flashpatch branch ever having been taken. This build drops
+// the flashpatch entirely (keeping only the ucode/templateram/hndrte_reclaim patches)
+// to confirm the identical crash still happens with monitor-mode machinery fully gone.
+// Restore the attribute once this bisection is resolved.
+//__attribute__((at(0xa67b0, "flashpatch", CHIP_VER_BCM43596a0, FW_VER_ALL)))
 __attribute__((naked))
 void
 wl_monitor_call(void)
