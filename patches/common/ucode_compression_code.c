@@ -972,7 +972,6 @@ wlc_ucode_write_compressed(struct wlc_hw_info *wlc_hw, const int ucode[], const 
 {
     /* state: Decompression state buffer to pass to tinflate_block(). */
     DecompressionState state;
-    printf("ORIG CALL: ucode=%p nbytes=%d wlc_hw=%p\n", ucode, nbytes, wlc_hw);
     printf("Decompressing ucode at %p (len: %d) at %p\n", ucode_compressed_bin, ucode_compressed_bin_len, wlc_hw);
     /**** Clear decompression state buffer. ****/
     state.state     = INITIAL;

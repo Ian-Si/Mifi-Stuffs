@@ -140,6 +140,17 @@ void
 wl_monitor_hook(struct wl_info *wl, struct wl_rxsts *sts, struct sk_buff *p) {
 // TODO: fix the wlc_info structure
 //    switch(wl->wlc->monitor & 0xFF) {
+    // DIAGNOSTIC (temporary, 9.86.13_r831412_sta crash investigation): log every
+    // invocation of this hook along with the dispatch byte it reads at wl->wlc+0x250
+    // and, for comparison, the byte at wl->wlc+0x208 (the offset structs.common.h
+    // documents the "monitor" field at -- unverified for this firmware generation).
+    // This hook fires on EVERY invocation of the original ROM call site regardless
+    // of whether monitor mode is enabled, so if either byte transiently reads as
+    // 1-5 during normal (non-monitor) operation -- e.g. during AP bring-up -- the
+    // switch below will misfire into frame-capture code on a call that was never
+    // meant to be captured. Revert this printf once root cause is confirmed.
+    printf("MONHOOK wl=%p wlc=%p b250=%d b208=%d sts=%p p=%p\n",
+        wl, wl->wlc, *(((char *) wl->wlc) + 0x250), *(((char *) wl->wlc) + 0x208), sts, p);
     switch(*(((char *) wl->wlc) + 0x250)) {
         case MONITOR_RADIOTAP:
                 wl_monitor_radiotap(wl, sts, p, 0);
