@@ -47,6 +47,16 @@
 #include <version.h>            // version information
 #include <bcmpcie.h>
 #include <argprintf.h>          // allows to execute argprintf to print into the arg buffer
+#include <ieee80211_radiotap.h> // Radiotap header related
+
+extern void *inject_frame(struct wlc_info *wlc, struct sk_buff *p);
+
+struct inject_frame {
+    unsigned short len;
+    unsigned char pad;
+    unsigned char type;
+    char data[];
+};
 
 int 
 wlc_ioctl_hook(struct wlc_info *wlc, int cmd, char *arg, int len, void *wlc_if)
@@ -151,6 +161,36 @@ wlc_ioctl_hook(struct wlc_info *wlc, int cmd, char *arg, int len, void *wlc_if)
             }
             break;
 
+        case NEX_INJECT_FRAME:
+            {
+                sk_buff *p;
+                int bytes_used = 0;
+                struct inject_frame *frm = (struct inject_frame *) arg;
+
+                while ((frm->len > 0) && (bytes_used + frm->len <= len)) {
+                    if (frm->type == 0) {
+                        p = pkt_buf_get_skb(wlc->osh, frm->len + 202 + 8 - 4);
+                        skb_pull(p, 202);
+                        struct ieee80211_radiotap_header *radiotap =
+                            (struct ieee80211_radiotap_header *) p->data;
+                        memset(radiotap, 0, sizeof(struct ieee80211_radiotap_header));
+                        radiotap->it_len = 8;
+                        skb_pull(p, 8);
+                        memcpy(p->data, frm->data, frm->len - 4);
+                        skb_push(p, 8);
+                    } else {
+                        p = pkt_buf_get_skb(wlc->osh, frm->len + 202 - 4);
+                        skb_pull(p, 202);
+                        memcpy(p->data, frm->data, frm->len - 4);
+                    }
+                    inject_frame(wlc, p);
+                    bytes_used += frm->len;
+                    frm = (struct inject_frame *) (arg + bytes_used);
+                }
+                ret = IOCTL_SUCCESS;
+            }
+            break;
+
         default:
             ret = wlc_ioctl(wlc, cmd, arg, len, wlc_if);
     }
@@ -158,7 +198,20 @@ wlc_ioctl_hook(struct wlc_info *wlc, int cmd, char *arg, int len, void *wlc_if)
     return ret;
 }
 
-__attribute__((at(0x1F1DE8, "", CHIP_VER_BCM4358, FW_VER_7_112_200_17)))
-__attribute__((at(0x1F1EE8, "", CHIP_VER_BCM4358, FW_VER_7_112_201_3)))
-__attribute__((at(0x1FA9E4, "", CHIP_VER_BCM4356, FW_VER_7_35_101_5_sta)))
-GenericPatch4(wlc_ioctl_hook, wlc_ioctl_hook + 1);
+// TODO (9.86.13_r831412_sta): the wlc_ioctl ROM dispatch pointer slot for THIS firmware
+// build has not been located. This is a RAM-resident function-pointer word written by ROM
+// init code, not an executable byte sequence, so it is not findable by the signature-match
+// technique used elsewhere in this port (e.g. wl_sendup_newdrv). The 9.96.4 reference uses
+// 0x1C3CE4, but that address is specific to 9.96.4's own RAM/BSS layout -- confirmed NOT a
+// chip-wide constant (9.75.155.45, the other BCM43596a0 reference, doesn't wire this hook
+// at all, and the stock dword at 0x1C3CE4 differs across all three builds). Finding the
+// correct address needs either a ROM dump for this chip (none exists anywhere in this
+// framework -- no rom_extraction support for bcm43596a0) or tracing the ROM init code that
+// writes this pointer, neither of which is possible from the RAM-only firmware dumps on
+// hand. Do NOT guess-and-flash: an address picked without evidence is written blind into
+// firmware RAM with no way to predict the outcome. NEX_INJECT_FRAME/inject_frame() above
+// are ported and compile correctly, but are unreachable until this address is resolved.
+//__attribute__((at(0x1F1DE8, "", CHIP_VER_BCM4358, FW_VER_7_112_200_17)))
+//__attribute__((at(0x1F1EE8, "", CHIP_VER_BCM4358, FW_VER_7_112_201_3)))
+//__attribute__((at(0x1FA9E4, "", CHIP_VER_BCM4356, FW_VER_7_35_101_5_sta)))
+//GenericPatch4(wlc_ioctl_hook, wlc_ioctl_hook + 1);
