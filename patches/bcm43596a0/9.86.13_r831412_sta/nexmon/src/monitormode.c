@@ -56,21 +56,14 @@ extern void prepend_ethernet_ipv4_udp_header(struct sk_buff *p);
 int
 channel2freq(struct wl_info *wl, unsigned int channel)
 {
-    int freq = 0;
-    void *ci = 0;
+    int xx = 0;
+    short *ci = 0;
 
-    // NOTE (9.86.13_r831412_sta port): this chip only has a wrapper offset for
-    // wlc_phy_chan2freq_acphy_newdvr, not the plain wlc_phy_chan2freq_acphy -- the
-    // "newdvr" variant takes (pi, chanspec, chan_info_ptr, xxx), a different argument
-    // order than the plain one. The exact semantics of the swapped/extra argument
-    // are not verified against real firmware behaviour. This path is only exercised
-    // when actually annotating captured frames with a radiotap channel frequency --
-    // it is NOT used by the monitor-mode-enable flashpatch itself, so it does not
-    // affect whether "monitor" shows up as a supported mode. Treat frequency values
-    // in captured radiotap headers as unverified until checked on real traffic.
-    wlc_phy_chan2freq_acphy_newdvr(wl->wlc->band->pi, channel, (void **)&ci, &freq);
+    // Same ROM function and signature as the verified BCM43596a0 9.96.4 port: the
+    // channel info struct is returned through ci and the frequency is its second halfword.
+    wlc_phy_chan2freq_acphy_newdvr(wl->wlc->band->pi, channel, (void **) &ci, &xx);
 
-    return freq;
+    return ci[1];
 }
 
 void
@@ -131,26 +124,15 @@ wl_monitor_radiotap(struct wl_info *wl, struct wl_rxsts *sts, struct sk_buff *p,
         prepend_ethernet_ipv4_udp_header(p_new);
     }
 
-    //wl_sendup(wl, 0, p_new);
-// TODO: fix the structures to call the xmit function
-//    wl->dev->chained->funcs->xmit(wl->dev, wl->dev->chained, p_new);
+    wl_sendup_newdrv(wl, 0, p_new, 1);
 }
 
 void
 wl_monitor_hook(struct wl_info *wl, struct wl_rxsts *sts, struct sk_buff *p) {
 // TODO: fix the wlc_info structure
 //    switch(wl->wlc->monitor & 0xFF) {
-    // DIAGNOSTIC (temporary, 9.86.13_r831412_sta crash investigation): log every
-    // invocation of this hook along with the dispatch byte it reads at wl->wlc+0x250
-    // and, for comparison, the byte at wl->wlc+0x208 (the offset structs.common.h
-    // documents the "monitor" field at -- unverified for this firmware generation).
-    // This hook fires on EVERY invocation of the original ROM call site regardless
-    // of whether monitor mode is enabled, so if either byte transiently reads as
-    // 1-5 during normal (non-monitor) operation -- e.g. during AP bring-up -- the
-    // switch below will misfire into frame-capture code on a call that was never
-    // meant to be captured. Revert this printf once root cause is confirmed.
-    printf("MONHOOK wl=%p wlc=%p b250=%d b208=%d sts=%p p=%p\n",
-        wl, wl->wlc, *(((char *) wl->wlc) + 0x250), *(((char *) wl->wlc) + 0x208), sts, p);
+    // The dispatch byte at wlc+0x250 was verified on hardware for this firmware: it is
+    // the only byte in the wlc struct that changes 1 -> 2 on "wl monitor 1" -> "wl monitor 2".
     switch(*(((char *) wl->wlc) + 0x250)) {
         case MONITOR_RADIOTAP:
                 wl_monitor_radiotap(wl, sts, p, 0);
@@ -178,16 +160,7 @@ __attribute__((at(0x1f0a6, "flashpatch", CHIP_VER_BCM4358, FW_VER_ALL)))
 __attribute__((at(0x19CE86, "", CHIP_VER_BCM4356, FW_VER_ALL)))
 BLPatch(wl_monitor_hook, wl_monitor_hook);
 
-// BISECT (temporary, 9.86.13_r831412_sta crash investigation): the "at()" flashpatch
-// attribute below is commented out so this hook is NOT injected into ROM at all for
-// this build. wl_monitor_hook never fired once (zero MONHOOK log lines) across a full
-// boot-to-crash capture, and the trap's pc/lr (0x5669a/0x69683) are nowhere near this
-// flashpatch address (0xa67b0) or in the "patch" RAM region where our C code lives --
-// both point away from the flashpatch branch ever having been taken. This build drops
-// the flashpatch entirely (keeping only the ucode/templateram/hndrte_reclaim patches)
-// to confirm the identical crash still happens with monitor-mode machinery fully gone.
-// Restore the attribute once this bisection is resolved.
-//__attribute__((at(0xa67b0, "flashpatch", CHIP_VER_BCM43596a0, FW_VER_ALL)))
+__attribute__((at(0xa67b0, "flashpatch", CHIP_VER_BCM43596a0, FW_VER_ALL)))
 __attribute__((naked))
 void
 wl_monitor_call(void)

@@ -31,9 +31,8 @@ UCODESIZE=0xedc8
 TEMPLATERAMSTART=0x1e2948
 TEMPLATERAMSIZE=0x17a8
 
-# NOTE: FP_DATA_END_PTR below is the WEAKEST of these values -- found via a looser
-# byte-signature search than the others (see notes.md). Worth independently verifying
-# before trusting a build that uses it.
+# Verified on hardware (see notes): these slots are correct. The stock flashpatch table
+# (FP_CONFIG_ORIGBASE..ORIGEND, 155 entries) must be preserved when relocating it.
 FP_DATA_END_PTR=0x1acf58
 # fp_check_success
 FP_CONFIG_BASE_PTR_1=0x1aaee0
@@ -44,10 +43,9 @@ FP_CONFIG_END_PTR_2=0x1ab040
 FP_CONFIG_SIZE=0x800
 FP_CONFIG_BASE=$$(($(PATCHSTART) - $(FP_CONFIG_SIZE)))
 
-# FP_DATA_BASE/FP_CONFIG_ORIGBASE chip-constant across both known BCM43596a0 builds.
-# FP_CONFIG_ORIGEND differs between the two known builds (0x161DD8 vs 0x161E80) but is
-# never actually referenced by this chip's patch Makefile/awk script -- dead value,
-# copied from the 9.75.155.45 reference for consistency only.
+# Stock flashpatch tables of this build: config 0x161800..0x161cd8, data 0x161000..0x1614d8
+# (read from the stock firmware; FP_DATA_END_PTR's stock value is FP_DATA_ORIGEND).
 FP_DATA_BASE=0x161000
+FP_DATA_ORIGEND=0x1614d8
 FP_CONFIG_ORIGBASE=0x161800
-FP_CONFIG_ORIGEND=0x161DD8
+FP_CONFIG_ORIGEND=0x161cd8

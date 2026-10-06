@@ -11,10 +11,27 @@ BEGIN {
 	fp_config_end_ptr_2 = strtonum(fp_config_end_ptr_2);
 	ramstart = strtonum(ramstart);
 
+	fp_config_origbase = strtonum(fp_config_origbase);
+	fp_config_origend = strtonum(fp_config_origend);
+	fp_data_origend = strtonum(fp_data_origend);
+
 	fp_data_end = fp_data_base;
 	fp_config_end = fp_config_base;
-	
+
 	printf "%s: %s FORCE\n", out_file, src_file;
+
+	# Firmwares that ship their own populated flashpatch table (e.g. the BCM43596a0
+	# 9.86.13 build has 155 ROM bugfix entries) must keep those entries: relocate the
+	# stock table to the new config area and append nexmon's entries after it.
+	# Starting from an empty table silently disables every stock ROM patch.
+	if (fp_data_origend > fp_data_base && fp_config_origend > fp_config_origbase) {
+		n = fp_config_origend - fp_config_origbase;
+		printf "\t$(Q)dd if=$@ of=gen/fp_orig_config.bin bs=1 status=none skip=$$((0x%08x - 0x%08x)) count=%d\n", fp_config_origbase, ramstart, n;
+		printf "\t$(Q)dd if=gen/fp_orig_config.bin of=$@ bs=1 status=none conv=notrunc seek=$$((0x%08x - 0x%08x))\n", fp_config_base, ramstart;
+		printf "\t$(Q)printf \"  COPIED %d stock flashpatch entries\\n\"\n", n / 8;
+		fp_data_end = fp_data_origend;
+		fp_config_end = fp_config_base + n;
+	}
 }
 {
 	if ($2 == "FLASHPATCH") {

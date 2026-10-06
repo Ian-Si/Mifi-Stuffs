@@ -80,6 +80,9 @@ gen/flashpatches.mk: gen/nexmon2.pre $(OBJS) $(FW_PATH)/definitions.mk
 	$(Q)cat gen/nexmon2.pre | gawk \
 		-v fp_data_base=$(FP_DATA_BASE) \
 		-v fp_config_base=$(FP_CONFIG_BASE) \
+		-v fp_config_origbase=$(FP_CONFIG_ORIGBASE) \
+		-v fp_config_origend=$(FP_CONFIG_ORIGEND) \
+		-v fp_data_origend=$(FP_DATA_ORIGEND) \
 		-v fp_data_end_ptr=$(FP_DATA_END_PTR) \
 		-v fp_config_base_ptr_1=$(FP_CONFIG_BASE_PTR_1) \
 		-v fp_config_end_ptr_1=$(FP_CONFIG_END_PTR_1) \
